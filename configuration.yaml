@@ -1,0 +1,157 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+template:
+  - trigger:
+      platform: time
+      at: "23:59:01"
+    sensor:
+    - name: degree_day_daily
+      unique_id: degree_day_daily_id
+      state_class: measurement
+      state: >
+        {% set regularized_temp = 18.0 | float(0) %}
+        {% set average_outside_temp = states('sensor.outside_temperature_avg') | float(0) %}
+        {% set dd = regularized_temp - average_outside_temp %}
+        {% if dd > 0 %}
+          {{ dd | round(2) }}
+        {% else %}
+          0
+        {% endif %}
+      unit_of_measurement: 'gd'
+    - name: thermal_kwh_per_degree_day_daily
+      unique_id: thermal_kwh_per_degree_day_daily_id
+      state_class: measurement
+      state: >
+        {% set regularized_temp = 18.0 | float(0) %}
+        {% set average_outside_temp = states('sensor.outside_temperature_avg') | float(0) %}
+        {% set use = states('sensor.daily_heatpump_power_output') | float(0) %}
+        {% set dd = regularized_temp - average_outside_temp %}
+        {% if dd > 0 %}
+          {{ (use / dd) | round(2) }}
+        {% else %}
+          0
+        {% endif %}
+      unit_of_measurement: 'kWh/gd'
+    - name: electrical_kwh_per_degree_day_daily
+      unique_id: electrical_kwh_per_degree_day_daily_id
+      state_class: measurement
+      state: >
+        {% set regularized_temp = 18.0 | float(0) %}
+        {% set average_outside_temp = states('sensor.outside_temperature_avg') | float(0) %}
+        {% set use = states('sensor.daily_heatpump_power_input') | float(0) %}
+        {% set dd = regularized_temp - average_outside_temp %}
+        {% if dd > 0 %}
+          {{ (use / dd) | round(2) }}
+        {% else %}
+          0
+        {% endif %}
+      unit_of_measurement: 'kWh/gd'
+    - name: thermal_kwh_per_degree_day_yearly
+      unique_id: thermal_kwh_per_degree_day_yearly_id
+      state_class: measurement
+      state: >
+        {% set use = states('sensor.yearly_heatpump_power_output') | float(0) %}
+        {% set dd = states('sensor.yearly_degree_day') | float(1) %}
+        {{ (use / dd) | round(2) }}
+      unit_of_measurement: 'kWh/gd'
+    - name: eletrical_kwh_per_degree_day_yearly
+      unique_id: electrical_kwh_per_degree_day_yearly_id
+      state_class: measurement
+      state: >
+        {% set use = states('sensor.yearly_heatpump_power_input') | float(0) %}
+        {% set dd = states('sensor.yearly_degree_day') | float(1) %}
+        {{ (use / dd) | round(2) }}
+      unit_of_measurement: 'kWh/gd'
+  - sensor:
+    - name: "Delta_CurrentFlow_TargetFlow"
+      unique_id: delta_currentflow_targetflow
+      unit_of_measurement: "K"
+      state_class: measurement
+      state: >
+        {% set current = states('sensor.boiler_current_flow_temperature') | float(0) %}
+        {% set target = states('sensor.thermostat_hc1_target_flow_temperature') | float(0) %}
+        {% if states('sensor.boiler_compressor_activity') == 'heating' and current > target %}
+          {{ (current - target) | round(3, default=0) }}
+        {% elif states('sensor.boiler_compressor_activity') == 'none' and current < target %}
+          {{ (target - current) | round(3, default=0) }}
+        {% else %}
+          0
+        {% endif %}
+    - name: "HP Daily COP"
+      unique_id: "HP_DAILY_COP"
+      unit_of_measurement: W
+      state_class: measurement
+      state: >-
+        {{ states('sensor.daily_heatpump_power_output') | float(0) / states('sensor.daily_heatpump_power_input') | float(0) | round(2) }}
+    - name: "HP Yearly COP"
+      unique_id: "HP_Yearly_COP_id"
+      unit_of_measurement: W
+      state_class: measurement
+      state: >-
+        {{ states('sensor.yearly_heatpump_power_output') | float(0) / states('sensor.yearly_heatpump_power_input') | float(0) | round(2) }}
+
+  - binary_sensor:
+      - name: "Current below target"
+        state: >
+          {% set current = states('sensor.boiler_current_flow_temperature') | float(0) %}
+          {% set target = states('sensor.thermostat_hc1_target_flow_temperature') | float(0) %}
+
+          {{ (current < target) }}
+
+utility_meter:
+  hysteresis_currentflow_targetflow:
+    unique_id: hysteresis_currentflow_targetflow_id
+    source: sensor.integration_delta_currentflow_targetflow
+    cycle: yearly
+  daily_heatpump_power_output:
+    unique_id: daily_heatpump_power_output_id
+    source: sensor.integration_heatpump_power_output
+    cycle: daily
+  yearly_heatpump_power_output:
+    unique_id: yearly_heatpump_power_output_id
+    source: sensor.integration_heatpump_power_output
+    cycle: yearly
+  daily_heatpump_power_input:
+    unique_id: daily_heatpump_power_input_id
+    source: sensor.boiler_total_energy_consumption_compressor
+    cycle: daily
+  yearly_heatpump_power_input:
+    unique_id: yearly_heatpump_power_input_id
+    source: sensor.boiler_total_energy_consumption_compressor
+    cycle: yearly
+  yearly_degree_day:
+    unique_id: yearly_degree_day_id
+    source: sensor.degree_day_daily
+    cycle: yearly
+
+sensor:
+  - platform: integration
+    unique_id: integration_delta_currentflow_targetflow_id
+    method: left
+    source: sensor.delta_currentflow_targetflow
+    name: "Integration Delta CurrentFlow TargetFlow"
+    unit_time: min
+  - platform: integration
+    unique_id: integration_heatpump_power_output_id
+    method: left
+    source: sensor.boiler_compressor_power_output
+    name: "Integration heatpump power output"
+    unit_time: h
+  - platform: statistics
+    unique_id: outside_temperature_avg_id
+    name: "outside_temperature_avg"
+    entity_id: sensor.temperatuur
+    state_characteristic: mean
+    max_age:
+      hours: 24
+    sampling_size: 1440

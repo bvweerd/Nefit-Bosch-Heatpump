@@ -1,0 +1,36 @@
+- id: '1730199076768'
+  alias: Reset Hysterese
+  description: With every compressor state change the hysterese will be reset to 0
+    in order to start a new hysterese
+  triggers:
+  - entity_id:
+    - sensor.boiler_compressor_activity
+    trigger: state
+  conditions: []
+  actions:
+  - data:
+      value: '0'
+    target:
+      entity_id: sensor.hysteresis_currentflow_targetflow
+    action: utility_meter.calibrate
+  mode: single
+- id: '1730199103648'
+  alias: Reset hysteresis due to actual below target
+  description: ''
+  triggers:
+  - entity_id:
+    - binary_sensor.current_below_target
+    from: 'off'
+    to: 'on'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: sensor.boiler_compressor_activity
+    state: heating
+  actions:
+  - data:
+      value: '0'
+    target:
+      entity_id: sensor.hysteresis_currentflow_targetflow
+    action: utility_meter.calibrate
+  mode: single
