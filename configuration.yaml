@@ -132,6 +132,7 @@ utility_meter:
   yearly_degree_day:
     unique_id: yearly_degree_day_id
     source: sensor.degree_day_daily
+    delta_values: true
     cycle: yearly
 
 sensor:
